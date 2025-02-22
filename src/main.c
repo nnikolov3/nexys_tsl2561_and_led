@@ -13,35 +13,48 @@
 /* Include necessary headers */
 #include "main.h"
 
-int main() {
-  /* Initialize I2C and TSL2561 sensor */
-  XIic_Initialize(&i2cInstance, XPAR_IIC_0_DEVICE_ID);
-  tsl2561_init(&i2cInstance);
+int main ( )
+{
+    /* Initialize I2C and TSL2561 sensor */
+    XIic_Initialize ( &i2cInstance, XPAR_IIC_0_DEVICE_ID );
+    tsl2561_init ( &i2cInstance );
 
-  /* Create FreeRTOS tasks */
-  xTaskCreate(sensorTask, "Sensor", configMINIMAL_STACK_SIZE, NULL,
-              tskIDLE_PRIORITY + 2, NULL);
+    /* Create FreeRTOS tasks */
+    xTaskCreate ( sensorTask,
+                  "Sensor",
+                  configMINIMAL_STACK_SIZE,
+                  NULL,
+                  tskIDLE_PRIORITY + 2,
+                  NULL );
 
-  xTaskCreate(pidTask, "PID", configMINIMAL_STACK_SIZE, NULL,
-              tskIDLE_PRIORITY + 1, NULL);
+    xTaskCreate ( pidTask,
+                  "PID",
+                  configMINIMAL_STACK_SIZE,
+                  NULL,
+                  tskIDLE_PRIORITY + 1,
+                  NULL );
 
-  /* Start the FreeRTOS scheduler */
-  vTaskStartScheduler();
+    /* Start the FreeRTOS scheduler */
+    vTaskStartScheduler ( );
 
-  /* Should never reach here unless scheduler fails */
-  return 0;
+    /* Should never reach here unless scheduler fails */
+    return 0;
 }
 
-void sensorTask(void *pvParameters) {
-  for (;;) {
-    // TODO: Read TSL2561 and send lux to PID task
-    vTaskDelay(pdMS_TO_TICKS(50)); // Run every 50ms
-  }
+void sensorTask ( void* pvParameters )
+{
+    for ( ;; )
+    {
+        // TODO: Read TSL2561 and send lux to PID task
+        vTaskDelay ( pdMS_TO_TICKS ( 50 ) ); // Run every 50ms
+    }
 }
 
-void pidTask(void *pvParameters) {
-  for (;;) {
-    // TODO: Calculate PID output and adjust PWM
-    vTaskDelay(pdMS_TO_TICKS(50)); // Run every 50ms
-  }
+void pidTask ( void* pvParameters )
+{
+    for ( ;; )
+    {
+        // TODO: Calculate PID output and adjust PWM
+        vTaskDelay ( pdMS_TO_TICKS ( 50 ) ); // Run every 50ms
+    }
 }

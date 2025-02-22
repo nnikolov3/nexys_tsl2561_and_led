@@ -30,9 +30,8 @@ PointerAlignment: Left # int* ptr (not int *ptr)
 BinPackArguments: false # Don't pack arguments, align them
 BinPackParameters: false # Don't pack parameters, align them
 
-# Align comments with at least 2 spaces before them
+# Align comments (removed invalid MinCommentAlignment)
 CommentPragmas: "^ IWYU pragma:"
-MinCommentAlignment: 2
 
 # Ensure consistent spacing around operators
 SpaceBeforeAssignmentOperators: true
