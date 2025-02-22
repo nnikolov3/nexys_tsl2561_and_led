@@ -46,7 +46,7 @@ This project implements a closed-loop PID controller using FreeRTOS on a MicroBl
 
 <https://www.ece.ucdavis.edu/~spencer/195/datasheets/PID-Without-a-PhD.pdf>
 
-PID stands for **Proportional-Integral-Derivative**. It’s a control mechanism used in systems (like your LED brightness project) to make an output (e.g., light level) match a desired target (setpoint) by adjusting an input (e.g., LED PWM duty cycle). It does this by continuously monitoring the difference between the actual value and the target—called the **error**—and tweaking the system to minimize that error.
+PID stands for **Proportional-Integral-Derivative**. It’s a control mechanism used in systems to make an output (e.g., light level) match a desired target (setpoint) by adjusting an input (e.g., LED PWM duty cycle). It does this by continuously monitoring the difference between the actual value and the target—called the **error**—and tweaking the system to minimize that error.
 
 Think of it like driving a car:
 
