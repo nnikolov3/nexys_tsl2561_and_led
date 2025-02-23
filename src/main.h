@@ -46,3 +46,7 @@ static void gpio_intr ( void* pvUnused );
 void sem_taken_que_tx ( void* p );
 
 void que_rx ( void* p );
+
+int do_init ( void );
+
+void nexys4io_selfTest ( void );

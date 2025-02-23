@@ -13,6 +13,7 @@
 #define TSL2561_H
 
 /* Include necessary headers */
+#include "xiic.h"
 #include <stdint.h>
 
 /* Enum to define TSL2561 channels */
@@ -28,5 +29,11 @@ typedef struct
     uint16_t ch0; // Visible + IR channel value (16-bit)
     uint16_t ch1; // IR-only channel value (16-bit)
 } tsl2561_data_t;
+
+/* Function Prototypes */
+
+void     tsl2561_init ( XIic* i2c );
+uint16_t tsl2561_readChannel ( XIic* i2c, tsl2561_channel_t channel );
+float    tsl2561_calculateLux ( uint16_t ch0, uint16_t ch1 );
 
 #endif /* TSL2561_H */
