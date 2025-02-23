@@ -1,20 +1,29 @@
 
-/* Kernel includes. */
+
+#ifndef MAIN_H
+#define MAIN_H
+
+/* Standard C library includes. */
+#include <stdlib.h>
+
+/* Xilinx BSP and platform includes. */
+#include "sleep.h"
+#include "xgpio.h"
+#include "xil_printf.h"
+#include "xparameters.h"
+#include "xtmrctr.h"
+
+/* FreeRTOS kernel includes. */
 #include "FreeRTOS.h"
-#include "nexys4IO.h"
-#include "platform.h"
 #include "queue.h"
 #include "semphr.h"
 #include "task.h"
 #include "timers.h"
-#include "xil_printf.h"
-#include "xparameters.h"
-#include <stdlib.h>
 
-/* BSP includes. */
-#include "sleep.h"
-#include "xgpio.h"
-#include "xtmrctr.h"
+/* Project-specific includes. */
+#include "nexys4IO.h"
+#include "platform.h"
+#include "tsl2561.h"
 
 /*Definitions for NEXYS4IO Peripheral*/
 #define N4IO_DEVICE_ID XPAR_NEXYS4IO_0_DEVICE_ID
@@ -31,6 +40,8 @@
 
 // Create Instances
 static XGpio xInputGPIOInstance;
+
+static XIic i2c;
 
 // Function Declarations
 static void prvSetupHardware ( void );
@@ -50,3 +61,5 @@ void que_rx ( void* p );
 int do_init ( void );
 
 void nexys4io_selfTest ( void );
+
+#endif /* MAIN_H */

@@ -97,6 +97,7 @@ static void prvSetupHardware ( void )
 
         do_init ( );
         nexys4io_selfTest ( );
+        tsl2561_init ( &i2c );
     }
 
     configASSERT ( ( xStatus == pdPASS ) );
