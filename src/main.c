@@ -20,6 +20,9 @@ int main ( void )
 
     // Initialize the HW
     prvSetupHardware ( );
+    do_init ( );
+    nexys4io_selfTest ( );
+    tsl2561_init ( &I2C_Instance );
 
     // Create Semaphore
     vSemaphoreCreateBinary ( binary_sem );
@@ -94,10 +97,6 @@ static void prvSetupHardware ( void )
             XGpio_InterruptEnable ( &xInputGPIOInstance, XGPIO_IR_CH1_MASK );
             XGpio_InterruptGlobalEnable ( &xInputGPIOInstance );
         }
-
-        do_init ( );
-        nexys4io_selfTest ( );
-        tsl2561_init ( &i2c );
     }
 
     configASSERT ( ( xStatus == pdPASS ) );
@@ -159,6 +158,24 @@ int do_init ( void )
     {
         return XST_FAILURE;
     }
+
+    // Get AXI I2C device configuration
+    XIic_Config* ConfigPtr = XIic_LookupConfig ( I2C_DEV_ID_ADDR );
+    if ( ConfigPtr == NULL )
+    {
+        return XST_FAILURE;
+    }
+    // Initialize the I2C driver
+    status =
+        XIic_CfgInitialize ( &I2C_Instance, ConfigPtr, ConfigPtr->BaseAddress );
+    if ( status != XST_SUCCESS )
+    {
+        return status;
+    }
+
+    XIic_Start ( &I2C_Instance );
+    // Enable the I2C Controller
+    return XST_SUCCESS;
 }
 
 /****************************************************************************/
