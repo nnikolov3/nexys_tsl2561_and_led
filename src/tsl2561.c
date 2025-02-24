@@ -12,10 +12,29 @@
  * Authors: Nikolay Nikolov, Ashten Bontrager
  */
 #include "tsl2561.h"
-#include "xiic.h"
+
+/*
+ * TSL2561 Initialization Notes:
+ *
+ * After applying VDD, the device will initially be in the power-down state. To
+ * operate the device, issue a command to access the CONTROL register followed
+ * by the data value 03h to power up the device. At this point, both ADC
+ * channels will begin a conversion at the default integration time of 400 ms.
+ * After 400 ms, the conversion results will be available in the DATA0 and
+ * DATA1 registers.
+
+Configuration:
+▪ SCL Clock Freq (in Khz) = 100
+▪ Address Mode = 7 bit
+▪ SCL/SDA Initial Delay = 0
+▪ Active State of SDA = 1
+▪ General Purpose Output Width = 1
+▪ Default GPIO Output Value = 0x00
+ */
 
 void tsl2561_init ( XIic* i2c )
 {
+
     // Power on sensor, verify ID, configure timing register
 }
 

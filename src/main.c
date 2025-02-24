@@ -20,6 +20,9 @@ int main ( void )
 
     // Initialize the HW
     prvSetupHardware ( );
+    do_init ( );
+    nexys4io_selfTest ( );
+    tsl2561_init ( &I2C_Instance );
 
     // Create Semaphore
     vSemaphoreCreateBinary ( binary_sem );
@@ -94,13 +97,6 @@ static void prvSetupHardware ( void )
             XGpio_InterruptEnable ( &xInputGPIOInstance, XGPIO_IR_CH1_MASK );
             XGpio_InterruptGlobalEnable ( &xInputGPIOInstance );
         }
-
-        // initialize the Nexys4 driver
-        uint32_t status = NX4IO_initialize ( N4IO_BASEADDR );
-        if ( status != XST_SUCCESS )
-        {
-            return XST_FAILURE;
-        }
     }
 
     configASSERT ( ( xStatus == pdPASS ) );
@@ -143,4 +139,67 @@ void que_rx ( void* p )
         NX4IO_setLEDs ( ReceivedValue );
         xil_printf ( "Queue Received: %d\r\n", ReceivedValue );
     }
+}
+
+/****************************************************************************
+ * initialize the system
+ *
+ * This function is executed once at start-up and after resets.  It initializes
+ * the peripherals and registers the interrupt handler(s)
+ *****************************************************************************/
+int do_init ( void )
+{
+    int status; // status from Xilinx Lib calls
+
+    // initialize the Nexys4IO and Pmod544IO hardware and drivers
+    // rotary encoder is set to increment from 0 by DUTY_CYCLE_CHANGE
+    status = NX4IO_initialize ( N4IO_BASEADDR );
+    if ( status != XST_SUCCESS )
+    {
+        return XST_FAILURE;
+    }
+
+    // Get AXI I2C device configuration
+    XIic_Config* ConfigPtr = XIic_LookupConfig ( I2C_DEV_ID_ADDR );
+    if ( ConfigPtr == NULL )
+    {
+        return XST_FAILURE;
+    }
+    // Initialize the I2C driver
+    status =
+        XIic_CfgInitialize ( &I2C_Instance, ConfigPtr, ConfigPtr->BaseAddress );
+    if ( status != XST_SUCCESS )
+    {
+        return status;
+    }
+
+    XIic_Start ( &I2C_Instance );
+    // Enable the I2C Controller
+    return XST_SUCCESS;
+}
+
+/****************************************************************************/
+/**
+ * nexys4io_selfTest() - performs a self test on the NexysA7 peripheral
+ *
+ * @brief This is mostly a visual test to confirm that the 7-segment display and
+ * RGB LEDs hardware and drivers are operating correctly.  The test does the
+ *following: o sends pattern(s) to the LEDs on the board o Writes a message on
+ *the 7-segment display o individually lights the RGB LEDs o sets the RGB2 LED
+ *to several values that can be observed o Turns off the LEDs and blanks the
+ *7-segment digits and decimal points
+ */
+void nexys4io_selfTest ( void )
+{
+    xil_printf ( "Starting Nexys4IO self test...\r\n" );
+
+    xil_printf ( "\tcheck functionality of 7-segment display\r\n" );
+    // set the display digits to -ECE544- and turn off
+    // the decimal points using the "raw" set functions.
+    NX4IO_SSEG_setSSEG_DATA ( SSEGHI, 0x0058E30E );
+    NX4IO_SSEG_setSSEG_DATA ( SSEGLO, 0x00144116 );
+    usleep ( 2000 * 1000 );
+
+    xil_printf ( "...Nexys4IO self test complete\r\n" );
+    return;
 }
