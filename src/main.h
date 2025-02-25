@@ -24,6 +24,7 @@
 #include "nexys4IO.h"
 #include "platform.h"
 #include "tsl2561.h"
+#include "pidtask.h"
 
 /*Definitions for NEXYS4IO Peripheral*/
 #define N4IO_DEVICE_ID XPAR_NEXYS4IO_0_DEVICE_ID

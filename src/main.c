@@ -13,6 +13,10 @@
 /* Include necessary headers */
 #include "main.h"
 
+/********** Duty Cycle Related Constants **********/
+#define max_duty 255 // max possible duty cycle for RGB1 Blue
+#define min_duty 0   // min possible duty cycle for RGB1 Blue
+
 int main ( void )
 {
     // Announcement
@@ -32,6 +36,9 @@ int main ( void )
 
     /* Sanity check that the queue was created. */
     configASSERT ( xQueue );
+
+    /*Creat pid structure for keeping track of PID elements*/
+    PID_t ledPID;
 
     // Create Task1
     xTaskCreate ( sem_taken_que_tx,
@@ -202,4 +209,131 @@ void nexys4io_selfTest ( void )
 
     xil_printf ( "...Nexys4IO self test complete\r\n" );
     return;
+}
+
+/*********************PID Task Prototype*************************************
+*   Task Handles the Following:
+*   Reads perameter message from MsgQ
+*   Update new control/setpoint parameters
+*   Get Current lux readig from TSL2561 sensor
+*       done using the TSL2561 driver in implemented
+*       in the C file of the same name
+*   Execute PID algo function 
+*   Drive PWM signal for LED, use RGB writ commands
+*   write to display thread MsgQ to update
+*   setpoint and current lux
+*****************************************************************************/
+void PID_Task (PID_t* pid, void* p)
+{
+    float pidOUT = 0;       // float percent value returned from PID algo
+    float tsl2561 = 0;      // float value returned from tsl2561 driver 
+    uint8_t pwmLED = 127;   // 8-bit int value for writing to PWM LED
+
+    static bool isInitialized = false;	// true if the init function has run at least once
+    // initialize the pid struct if it hasn't been
+    if(!isInitialized)
+    {
+        isInitialized = pid_init(&pid);
+    }
+
+    // main task loop
+    while(1)
+
+    // TODO: add MsgQ deQ functionality and update pid values with it
+
+    // TODO: get(sample) TSL2561 reading
+
+    // running PID algorithm, uses float from TSL2561 driver
+    // returns the percentage to increase/decrease the pwmLED by
+    pidOUT = pid_funct(&pid, tsl2561);
+
+    // use the PID output to adjust the duty cycle and write it to the PWM LED
+    // if the percentage returned is positive, the intensity needs to be increased
+    // because the sensor is reading a value lower than the setpoint
+    // if it's negative the intensity needs to be decreased becasue the 
+    // sensor is reading a value hgiher than the setpoint
+    if (pidOUT >= 0)
+    {
+        // clamp the output to the max value if pidOUT >= 1
+        // prevent over driving LED or wrap around
+        if ((pwmLED += (uint8_t)((pidOUT) * max_duty)) >= max_duty)
+        {
+            pwmLED = max_duty;
+        }
+        else
+        {
+            pwmLED += (uint8_t)((pidOUT) * max_duty);
+        }
+    }
+    else
+    {
+        // clamp the output to the min value if pidOUT <= 0
+        // prevent over driving LED or wrap around
+        if ((pwmLED -= (uint8_t)((pidOUT) * max_duty)) <= min_duty)
+        {
+            pwmLED = min_duty;
+        }
+        else
+        {
+            pwmLED -= (uint8_t)((pidOUT) * max_duty);
+        }
+    }
+    // write duty cycle to RGB1 blue, drives pwmLED
+    NX4IO_RGBLED_setDutyCycle(RGB1, 0, 0, pwmLED)
+
+    // TODO: send message to display thread MsgQ to update setpoint and current lux
+}
+
+/*********************PID Initialization*************************************
+*   Initializing PID structure for use in the PI Task
+*****************************************************************************/
+bool pid_init (PID_t *pid)
+{
+    pid -> Kp = 1;
+    pid -> Ki = 0;
+    pid -> Kd = 0;
+    pid -> setpoint = ;
+    pid -> integral = 0;
+    pid -> prev_error = 0;
+    pid -> delta_t = 0.437; // set to the worst case sampling time but will dynamically update in use
+    // assumes that the float value returned is a 16 bit value, would need be adjusted 
+    pid -> max_lim = 65536; // set max value to 99%, should result in setting LED PWM to 99%
+    pid -> min_lim = 0; // set min value to 1%, should result in setting LED PWM to 1%
+
+    // returns true after initializing PID structure 
+    return true;
+}
+
+/*********************PID Algo*************************************
+*   Take PID structure and lux value from TSL2561
+*   returns float percentage value, used for writing to LED
+*   PID output = P + I + D
+*   P = Kp(e(t)), where Kp is proportional gain
+*   I = Ki(integral(e(t)dt)) where Ki is the integral gain
+*   D = Kd((de(t))/dt) where Kd is the derivative gain
+*   e(t) is the error and is equal to the setpoint - measured value
+*   the integral can be though of as the accumulation of e(t)'s
+*   the derivative can be though of as the (delta e(t))/(delta_t)
+*   delta_t is the time between samples
+*****************************************************************************/
+float pid_funct (PID_t* pid, float lux_value)
+{
+    // e(t), error at time of sample
+    float error = pid->setpoint - lux_value;
+
+    // proportional term
+    float Pterm = pid->Kp * error;
+    
+    // get integral term and update integral
+    pid -> integral += (error * pid->delta_t);
+    float Iterm = pid->Ki * pid->integral;
+
+    // get derivative out term
+    float Dterm = pid->Kd * ((error - pid->prev_error) / pid->delta_t);
+
+    // update previous error value
+    pid->prev_error = error;
+
+    // return a percentage value to be used for setting the intensity of PWM LED
+    return (Pterm + Iterm + Dterm) / pid->setpoint;
 }
