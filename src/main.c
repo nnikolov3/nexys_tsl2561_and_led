@@ -17,6 +17,8 @@
 #define max_duty 255 // max possible duty cycle for RGB1 Blue
 #define min_duty 0   // min possible duty cycle for RGB1 Blue
 
+#define lux_mask 0xFFFF // mask used for combining setpoint and lux values into one double
+
 int main ( void )
 {
     // Announcement
@@ -33,9 +35,13 @@ int main ( void )
 
     /* Create the queue */
     xQueue = xQueueCreate ( mainQUEUE_LENGTH, sizeof ( uint16_t ) );
+    toPID = xQueueCreate (mainQUEUE_LENGTH, sizeof (uint16_t));
+    fromPID = xQueueCreate (mainQUEUE_LENGTH, sizeof (uint32_t));
 
     /* Sanity check that the queue was created. */
     configASSERT ( xQueue );
+    configASSERT (toPID);
+    configASSERT (fromPID);
 
     /*Creat pid structure for keeping track of PID elements*/
     PID_t ledPID;
@@ -185,8 +191,7 @@ int do_init ( void )
     return XST_SUCCESS;
 }
 
-/****************************************************************************/
-/**
+/****************************************************************************
  * nexys4io_selfTest() - performs a self test on the NexysA7 peripheral
  *
  * @brief This is mostly a visual test to confirm that the 7-segment display and
@@ -195,7 +200,7 @@ int do_init ( void )
  *the 7-segment display o individually lights the RGB LEDs o sets the RGB2 LED
  *to several values that can be observed o Turns off the LEDs and blanks the
  *7-segment digits and decimal points
- */
+ *****************************************************************************/
 void nexys4io_selfTest ( void )
 {
     xil_printf ( "Starting Nexys4IO self test...\r\n" );
@@ -211,7 +216,7 @@ void nexys4io_selfTest ( void )
     return;
 }
 
-/*********************PID Task Prototype*************************************
+/**************************PID Task******************************************
 *   Task Handles the Following:
 *   Reads perameter message from MsgQ
 *   Update new control/setpoint parameters
@@ -228,6 +233,13 @@ void PID_Task (PID_t* pid, void* p)
     float pidOUT = 0;       // float percent value returned from PID algo
     float tsl2561 = 0;      // float value returned from tsl2561 driver 
     uint8_t pwmLED = 127;   // 8-bit int value for writing to PWM LED
+    uint16_t btnSws;        // value recieved from the input task Q
+    uint32_t setpntLux;       // value to send to the display Task Q
+    uint8_t btns;           // btn values parsed from btnSws
+    uint8_t sws;            // switch values parsed from btnSws
+    float baseID = 0.1;     // base increment for ID tuning set to 0.1
+    uint8_t baseSP = 1;     // base increment for setpoint and Kp to 1
+    uint8_t incScaling;     // scaling factor based on switch values
 
     static bool isInitialized = false;	// true if the init function has run at least once
     // initialize the pid struct if it hasn't been
@@ -239,19 +251,105 @@ void PID_Task (PID_t* pid, void* p)
     // main task loop
     while(1)
 
-    // TODO: add MsgQ deQ functionality and update pid values with it
+    // recieve message from input task, 16-bit uint that contains switch and button values
+    xQueueReceive (toPID, &btnSws, portMAX_DELAY);
+    
+    // parse values recieved from input task
+    btns = (btnSws & 0x0300) >> 8;
+    sws = (btnSws & 0x0FF);
+
+    // scale base increments based on values of switches[5:4]
+    if (!(sws & 0x30))  //switches [5:4] = [0:0]
+    {
+        incScaling = 1;
+    }
+    else if (sws & 0x20)  //switches [5:4] = [1:X]
+    {
+        incScaling = 10;
+    }
+    else if (sws & 0x10)  //switches [5:4] = [1:0]
+    {
+        incScaling = 5;
+    }
+    
+    /* PID modifier 
+    *   if switch[3] only increment or decrement setpoint, based on button press
+    *   else check switches[7:6] 
+    *   Just switch [6] = 0x40, Kp should changed on button press
+    *   Just switch [7] = 0x80, Ki should be changed on button press
+    *   Both switches [7:6] = 0XC0, Kd should be changed on button press
+    *   for buttons, a value of 1 means up button was pressed
+    *   a value of 2 means down button was pressed
+    *   After parsing, updates the PID struct with the setpoint or PID gain values 
+    */
+    if((sws & 0x08))
+    {
+        if ((btns & 0x03) == 1)
+        {
+            pid->setpoint += (incScaling * baseSP);
+        }
+        if ((btns & 0x03) == 2)
+        {
+            pid->setpoint -= (incScaling * baseSP);
+        }
+    }
+    else
+    {
+        switch (sws & 0xC0)
+        {
+        case 0x40:
+            if ((btns & 0x03) == 1)
+            {
+                pid->Kp += (incScaling * baseSP);
+            }
+            if ((btns & 0x03) == 2)
+            {
+                pid->Kp -= (incScaling * baseSP);
+            }
+            break;
+        
+        case 0x80:
+            if ((btns & 0x03) == 1)
+            {
+                pid->Ki += (incScaling * baseID);
+            }
+            if ((btns & 0x03) == 2)
+            {
+                pid->Ki -= (incScaling * baseID);
+            }
+            break;
+        
+        case 0xC0:
+            if ((btns & 0x03) == 1)
+            {
+                pid->Kd += (incScaling * baseID);
+            }
+            if ((btns & 0x03) == 2)
+            {
+                pid->Kd -= (incScaling * baseID);
+            }
+            break;
+        
+         default:
+            break;
+        }
+    }
 
     // TODO: get(sample) TSL2561 reading
 
     // running PID algorithm, uses float from TSL2561 driver
     // returns the percentage to increase/decrease the pwmLED by
-    pidOUT = pid_funct(&pid, tsl2561);
+    pidOUT = pid_funct(&pid, tsl2561, sws);
 
-    // use the PID output to adjust the duty cycle and write it to the PWM LED
-    // if the percentage returned is positive, the intensity needs to be increased
-    // because the sensor is reading a value lower than the setpoint
-    // if it's negative the intensity needs to be decreased becasue the 
-    // sensor is reading a value hgiher than the setpoint
+    /*PWM LED Write
+    *   use the PID output to adjust the duty cycle and write it to the PWM LED
+    *   if the percentage returned is positive, the intensity needs to be increased
+    *   because the sensor is reading a value lower than the setpoint
+    *   if it's negative the intensity needs to be decreased becasue the 
+    *   sensor is reading a value hgiher than the setpoint
+    *   End by writing duty cycle to RGB1 blue, drives pwmLED
+    *   using NX4IO_RGBLED_setDutyCycle command
+    */
     if (pidOUT >= 0)
     {
         // clamp the output to the max value if pidOUT >= 1
@@ -278,18 +376,54 @@ void PID_Task (PID_t* pid, void* p)
             pwmLED -= (uint8_t)((pidOUT) * max_duty);
         }
     }
-    // write duty cycle to RGB1 blue, drives pwmLED
-    NX4IO_RGBLED_setDutyCycle(RGB1, 0, 0, pwmLED)
+    NX4IO_RGBLED_setDutyCycle(RGB1, 0, 0, pwmLED);
 
-    // TODO: send message to display thread MsgQ to update setpoint and current lux
+    // update setpntLux with value to be displayed by display task
+    setpntLux &= 0x00000000; // make sure old data is cleared 
+    setpntLux |= (uint32_t)(((tsl2561 & lux_mask) << 0) | // sensor measured value in lower 32 bits
+                 ((pid->setpoint & lux_mask) << 16)); // setpoint in upper 32 bits
+
+    //send message to display thread MsgQ to update setpoint and current lux
+    xQueueSend (fromPID, &setpntLux ,mainDONT_BLOCK);
 }
+
+/************************Display Task****************************************
+*   Gets lux and setpoint values from Q and updates 7-seg display
+*****************************************************************************/
+void Display_Task (void* p)
+{
+    uint32_t recievedLux;
+    uint16_t setpnt, luxVal;
+    while (1)
+    {
+        // recieve new sensor lux reading and setpoint values
+        xQueueReceive (fromPID, &recievedLux, portMAX_DELAY);
+
+        // make sure old values are cleared
+        setpnt &= 0x0000;
+        luxVal &= 0x0000;
+
+        // parse values
+        luxVal |= (recievedLux & lux_mask);
+        setpnt |= ((recievedLux >> 16) & lux_mask);
+
+        // write values to 7-seg display
+        NX410_SSEG_setAllDigits(SSEGHI, (uint8_t)(setpnt/100),
+        (uint8_t)((setpnt%100)/10), (uint8_t)((setpnt%100)%10), 
+        CC_BLANK, DP_NONE);
+        NX410_SSEG_setAllDigits(SSEGLO, (uint8_t)(luxVal/100),
+        (uint8_t)((luxVal%100)/10), (uint8_t)((luxVal%100)%10),
+        CC_BLANK, DP_NONE);
+    }
+}
+
 
 /*********************PID Initialization*************************************
 *   Initializing PID structure for use in the PI Task
 *****************************************************************************/
 bool pid_init (PID_t *pid)
 {
-    pid -> Kp = 1;
+    pid -> Kp = 0;
     pid -> Ki = 0;
     pid -> Kd = 0;
     pid -> setpoint = ;
@@ -316,20 +450,47 @@ bool pid_init (PID_t *pid)
 *   the derivative can be though of as the (delta e(t))/(delta_t)
 *   delta_t is the time between samples
 *****************************************************************************/
-float pid_funct (PID_t* pid, float lux_value)
+float pid_funct (PID_t* pid, float lux_value, uint8_t switches)
 {
     // e(t), error at time of sample
     float error = pid->setpoint - lux_value;
 
-    // proportional term
-    float Pterm = pid->Kp * error;
+    // proportional
+    float Pterm;
+    // set to zero if switch[0] is O, affectively disabling proportional control
+    if (switches & 0x01)
+    {
+        Pterm = pid->Kp * error;
+    }
+    else
+    {
+        Pterm = 0;
+    } 
     
-    // get integral term and update integral
+    // update integral, and get integral term
     pid -> integral += (error * pid->delta_t);
-    float Iterm = pid->Ki * pid->integral;
+    float Iterm;
+    // set to zero if switch[1] is 0
+    if (switches & 0x02)
+    {
+        Iterm = pid->Ki * pid->integral;
+    }
+    else
+    {
+        Iterm = 0;
+    }    
 
-    // get derivative out term
-    float Dterm = pid->Kd * ((error - pid->prev_error) / pid->delta_t);
+    // get derivative term
+    float Dterm;
+    // set to zero if switch[2] is 0
+    if (switches & 0x04)
+    {
+        Dterm = pid->Kd * ((error - pid->prev_error) / pid->delta_t);
+    }
+    else 
+    {
+        Dterm = 0;
+    }
 
     // update previous error value
     pid->prev_error = error;

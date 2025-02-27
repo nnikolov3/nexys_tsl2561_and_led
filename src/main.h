@@ -53,6 +53,12 @@ static XIic I2C_Instance; // I2C instance
 /* The queue used by the queue send and queue receive tasks. */
 static xQueueHandle xQueue = NULL;
 
+/* The queue used to transfer buttons/switches from the input task to PID task. */
+static xQueueHandle toPID = NULL;
+
+/* The queue used to transfer setpoint and lux from PID to display task. */
+static xQueueHandle fromPID = NULL;
+
 // Function Declarations
 static void prvSetupHardware ( void );
 static void gpio_intr ( void* pvUnused );
