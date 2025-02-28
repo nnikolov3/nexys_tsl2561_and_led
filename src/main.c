@@ -234,7 +234,7 @@ void PID_Task (void* p)
     float baseID = 0.1;     // base increment for ID tuning set to 0.1
     uint8_t baseSP = 1;     // base increment for setpoint and Kp to 1
     uint8_t incScaling;     // scaling factor based on switch values
-    TickType_t lastTick = 0 // used for more accurate delat t values
+    TickType_t lastTick = 0; // used for more accurate delat t values
 
     static bool isInitialized = false;	// true if the init function has run at least once
     // initialize the pid struct if it hasn't been
@@ -383,8 +383,8 @@ void PID_Task (void* p)
 
     // update setpntLux with value to be displayed by display task
     setpntLux &= 0x00000000; // make sure old data is cleared 
-    setpntLux |= (uint32_t)(((tsl2561 & lux_mask) << 0) | // sensor measured value in lower 32 bits
-                 ((pid->setpoint & lux_mask) << 16)); // setpoint in upper 32 bits
+    setpntLux |= (uint32_t)((((uint32_t)(tsl2561) & lux_mask) << 0) | // sensor measured value in lower 32 bits
+                 (((uint32_t)(pid->setpoint) & lux_mask) << 16)); // setpoint in upper 32 bits
 
     //send message to display thread MsgQ to update setpoint and current lux
     xQueueSend (fromPID, &setpntLux ,mainDONT_BLOCK);
