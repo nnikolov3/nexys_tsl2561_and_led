@@ -32,7 +32,7 @@ bool pid_init (PID_t* pid);
 // prototype of pid function that returns the controlled signal as a float
 // takes lux_value, returned from TSL2561 sensor returns float vlaue 
 // is used to determine what value to write for LED PWM 
-float pid_funct (PID_t* pid, float lux_value);
+float pid_funct (PID_t* pid, float lux_value, uint8_t switches);
 
 /*********************PID Task Prototype*************************************
 *   Task Handles the Following:
@@ -46,5 +46,9 @@ float pid_funct (PID_t* pid, float lux_value);
 *   write to display thread MsgQ to update
 *   setpoint and current lux
 *****************************************************************************/
-void PID_Task (PID_t* pid, void* p);
+void PID_Task (void* p);
 
+/************************Display Task****************************************
+*   Gets lux and setpoint values from Q and updates 7-seg display
+*****************************************************************************/
+void Display_Task (void* p);

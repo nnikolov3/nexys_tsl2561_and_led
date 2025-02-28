@@ -51,7 +51,7 @@ xSemaphoreHandle binary_sem;
 static XIic I2C_Instance; // I2C instance
 
 /* The queue used by the queue send and queue receive tasks. */
-static xQueueHandle xQueue = NULL;
+//static xQueueHandle xQueue = NULL;
 
 /* The queue used to transfer buttons/switches from the input task to PID task. */
 static xQueueHandle toPID = NULL;
@@ -63,9 +63,27 @@ static xQueueHandle fromPID = NULL;
 static void prvSetupHardware ( void );
 static void gpio_intr ( void* pvUnused );
 
-void sem_taken_que_tx ( void* p );
+// A task which takes the Interrupt Semaphore and sends the btn/sw states to PID Task
+void Parse_Input_Task ( void* p )
+{
 
-void que_rx ( void* p );
+    uint8_t btns = 0x00;
+    uint8_t sws = 0x00;
+    uint16_t ValueToSend = 0x0000;
+
+    while ( 1 )
+        if ( xSemaphoreTake ( binary_sem, 500 ) )
+        {
+            btns = (NX4IO_getBtns() & 0x0C) >> 2; // get btnu/d and right justify
+            sws = (uint8_t)(NX4IO_getSwitches() & 0x00FF); // get lower 8 switches
+            ValueToSend |= ((btns << 8) | (sws)); // move btnu to bit 9 and bntd to bit 8
+            //xil_printf ( "Queue Sent: %d\r\n", ValueToSend );
+            xQueueSend ( toPID, &ValueToSend, mainDONT_BLOCK );
+            ValueToSend &= 0x0000 ; // clear btn/sw values for next time
+        }
+        else
+            xil_printf ( "Semaphore time out\r\n" );
+}
 
 int do_init ( void );
 

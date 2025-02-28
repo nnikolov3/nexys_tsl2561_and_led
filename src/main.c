@@ -34,12 +34,10 @@ int main ( void )
     vSemaphoreCreateBinary ( binary_sem );
 
     /* Create the queue */
-    xQueue = xQueueCreate ( mainQUEUE_LENGTH, sizeof ( uint16_t ) );
     toPID = xQueueCreate (mainQUEUE_LENGTH, sizeof (uint16_t));
     fromPID = xQueueCreate (mainQUEUE_LENGTH, sizeof (uint32_t));
 
     /* Sanity check that the queue was created. */
-    configASSERT ( xQueue );
     configASSERT (toPID);
     configASSERT (fromPID);
 
@@ -47,19 +45,22 @@ int main ( void )
     PID_t ledPID;
 
     // Create Task1
-    xTaskCreate ( sem_taken_que_tx,
-                  (const char*) "TX",
+    xTaskCreate ( Parse_Input_Task,
+                  (const char*) "Parse_Input",
                   configMINIMAL_STACK_SIZE,
                   NULL,
                   1,
                   NULL );
 
     // Create Task2
-    xTaskCreate ( que_rx, "RX", configMINIMAL_STACK_SIZE, NULL, 2, NULL );
+    xTaskCreate ( PID_Task, "PID", configMINIMAL_STACK_SIZE, &ledPID, 2, NULL );
+
+    // Create Task3
+    xTaskCreate ( Display_Task, "Disp", configMINIMAL_STACK_SIZE, NULL, 3, NULL );
 
     // Start the Scheduler
     xil_printf ( "Starting the scheduler\r\n" );
-    xil_printf ( "Push Button to change the LED pattern\r\n\r\n" );
+    //xil_printf ( "Push Button to change the LED pattern\r\n\r\n" );
     vTaskStartScheduler ( );
 
     return -1;
@@ -124,34 +125,26 @@ static void gpio_intr ( void* pvUnused )
     XGpio_InterruptClear ( &xInputGPIOInstance, XGPIO_IR_MASK );
 }
 
-// A task which takes the Interrupt Semaphore and sends a queue to task 2.
-void sem_taken_que_tx ( void* p )
+// A task which takes the Interrupt Semaphore and sends the btn/sw states to PID Task
+void Parse_Input_Task ( void* p )
 {
 
-    uint16_t ValueToSend = 0x00FF;
+    uint8_t btns = 0x00;
+    uint8_t sws = 0x00;
+    uint16_t ValueToSend = 0x0000;
 
     while ( 1 )
         if ( xSemaphoreTake ( binary_sem, 500 ) )
         {
-            xil_printf ( "Queue Sent: %d\r\n", ValueToSend );
-            xQueueSend ( xQueue, &ValueToSend, mainDONT_BLOCK );
-            ValueToSend = ~ValueToSend; // Toggle for next time.
+            btns = (NX4IO_getBtns() & 0x0C) >> 2; // get btnu/d and right justify
+            sws = (uint8_t)(NX4IO_getSwitches() & 0x00FF); // get lower 8 switches
+            ValueToSend |= ((btns << 8) | (sws)); // move btnu to bit 9 and bntd to bit 8
+            //xil_printf ( "Queue Sent: %d\r\n", ValueToSend );
+            xQueueSend ( toPID, &ValueToSend, mainDONT_BLOCK );
+            ValueToSend &= 0x0000 ; // clear btn/sw values for next time
         }
         else
             xil_printf ( "Semaphore time out\r\n" );
-}
-
-void que_rx ( void* p )
-{
-
-    uint16_t ReceivedValue;
-    while ( 1 )
-    {
-        xQueueReceive ( xQueue, &ReceivedValue, portMAX_DELAY );
-        // Write to LED.
-        NX4IO_setLEDs ( ReceivedValue );
-        xil_printf ( "Queue Received: %d\r\n", ReceivedValue );
-    }
 }
 
 /****************************************************************************
@@ -228,18 +221,20 @@ void nexys4io_selfTest ( void )
 *   write to display thread MsgQ to update
 *   setpoint and current lux
 *****************************************************************************/
-void PID_Task (PID_t* pid, void* p)
+void PID_Task (void* p)
 {
+    PID_t* pid = (PID_t*)p; // get the PID struct passed from main
     float pidOUT = 0;       // float percent value returned from PID algo
     float tsl2561 = 0;      // float value returned from tsl2561 driver 
     uint8_t pwmLED = 127;   // 8-bit int value for writing to PWM LED
     uint16_t btnSws;        // value recieved from the input task Q
-    uint32_t setpntLux;       // value to send to the display Task Q
+    uint32_t setpntLux;     // value to send to the display Task Q
     uint8_t btns;           // btn values parsed from btnSws
     uint8_t sws;            // switch values parsed from btnSws
     float baseID = 0.1;     // base increment for ID tuning set to 0.1
     uint8_t baseSP = 1;     // base increment for setpoint and Kp to 1
     uint8_t incScaling;     // scaling factor based on switch values
+    TickType_t lastTick = 0 // used for more accurate delat t values
 
     static bool isInitialized = false;	// true if the init function has run at least once
     // initialize the pid struct if it hasn't been
@@ -298,33 +293,33 @@ void PID_Task (PID_t* pid, void* p)
         switch (sws & 0xC0)
         {
         case 0x40:
-            if ((btns & 0x03) == 1)
+            if ((btns & 0x03) == 2)
             {
                 pid->Kp += (incScaling * baseSP);
             }
-            if ((btns & 0x03) == 2)
+            if ((btns & 0x03) == 1)
             {
                 pid->Kp -= (incScaling * baseSP);
             }
             break;
         
         case 0x80:
-            if ((btns & 0x03) == 1)
+            if ((btns & 0x03) == 2)
             {
                 pid->Ki += (incScaling * baseID);
             }
-            if ((btns & 0x03) == 2)
+            if ((btns & 0x03) == 1)
             {
                 pid->Ki -= (incScaling * baseID);
             }
             break;
         
         case 0xC0:
-            if ((btns & 0x03) == 1)
+            if ((btns & 0x03) == 2)
             {
                 pid->Kd += (incScaling * baseID);
             }
-            if ((btns & 0x03) == 2)
+            if ((btns & 0x03) == 1)
             {
                 pid->Kd -= (incScaling * baseID);
             }
@@ -336,6 +331,14 @@ void PID_Task (PID_t* pid, void* p)
     }
 
     // TODO: get(sample) TSL2561 reading
+
+    // this may need to be moved into the TSL2561 module to result in a more accurate reading
+    // get tick when sample is collected and use to determin dt
+    TickType_t currentTick = xTaskGetTickCount();
+    pid->delta_t = ((currentTick - lastTick) * portTICK_PERIOD_MS) / 1000.0f;
+    // update last tick time for use in next dt calculation
+    lastTick = currentTick;
+
 
     // running PID algorithm, uses float from TSL2561 driver
     // returns the percentage to increase/decrease the pwmLED by
@@ -417,7 +420,6 @@ void Display_Task (void* p)
     }
 }
 
-
 /*********************PID Initialization*************************************
 *   Initializing PID structure for use in the PI Task
 *****************************************************************************/
@@ -426,7 +428,7 @@ bool pid_init (PID_t *pid)
     pid -> Kp = 0;
     pid -> Ki = 0;
     pid -> Kd = 0;
-    pid -> setpoint = ;
+    pid -> setpoint = 250;
     pid -> integral = 0;
     pid -> prev_error = 0;
     pid -> delta_t = 0.437; // set to the worst case sampling time but will dynamically update in use
