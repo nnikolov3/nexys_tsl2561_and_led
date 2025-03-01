@@ -6,21 +6,29 @@ BasedOnStyle: LLVM
 IndentWidth: 4
 UseTab: Never
 TabWidth: 4
+BracedInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
 
-# Align as much as possible
 AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignOperands: true
 AlignTrailingComments: true
-
+AlignArrayOfStructures: Right
+AlignEscapedNewlines: Left
+IncludeBlocks: Regroup
+IndentCaseBlocks: true
 # Space inside brackets for readability
-SpaceBeforeParens: Always
+SpaceBeforeParens: false
 SpaceInEmptyParentheses: true
 SpacesInParentheses: true
 SpacesInSquareBrackets: true
 SpacesInContainerLiterals: true
 SpaceAfterCStyleCast: true
+IndentCaseLabels: true
+MaxEmptyLinesToKeep: 1
+ReferenceAlignment: Right
+SeparateDefinitionBlocks: Always
 
 # Additional alignment and spacing tweaks
 ColumnLimit: 80
@@ -37,4 +45,6 @@ CommentPragmas: "^ IWYU pragma:"
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceAroundPointerQualifiers: After # int* not int *
+InsertNewlineAtEOF: True
+ReflowComments: true
 ---
