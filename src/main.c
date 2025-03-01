@@ -53,14 +53,6 @@ int main( void )
                         ; // Halt to debug
         }
 
-        /* Initialize and start interrupt controller after hardware setup */
-        if( XIntc_Initialize( &Intc, INTC_DEVICE_ID ) != XST_SUCCESS ||
-            XIntc_Start( &Intc, XIN_REAL_MODE ) != XST_SUCCESS )
-        {
-                xil_printf( "[ERROR] Interrupt controller failed\r\n" );
-                return -1;
-        }
-
         /* Enable global interrupts */
         Xil_ExceptionInit( );
         Xil_ExceptionRegisterHandler(
