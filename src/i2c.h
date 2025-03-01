@@ -27,13 +27,14 @@
 
 /* Device instance definitions - Hardware-specific IDs and addresses */
 #define IIC_DEVICE_ID \
-    XPAR_IIC_0_DEVICE_ID // Device ID for the AXI IIC controller, sourced from
-                         // xparameters.h
+        XPAR_IIC_0_DEVICE_ID // Device ID for the AXI IIC controller, sourced
+                             // from xparameters.h
 #define INTC_DEVICE_ID \
-    XPAR_INTC_0_DEVICE_ID // Device ID for the AXI interrupt controller, sourced
-                          // from xparameters.h
+        XPAR_INTC_0_DEVICE_ID // Device ID for the AXI interrupt controller,
+                              // sourced from xparameters.h
 #define I2C_SLAVE_ADDR \
-    0x39 // Default I2C slave address (0x39 for TSL2561 with ADDR pin floating)
+        0x39 // Default I2C slave address (0x39 for TSL2561 with ADDR pin
+             // floating)
 
 /* Global variables - Extern declarations for objects defined in i2c.c */
 extern XIic IicInstance; // IIC driver instance for interacting with the AXI IIC

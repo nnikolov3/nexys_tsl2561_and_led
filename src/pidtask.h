@@ -15,15 +15,15 @@
 
 typedef struct
 {
-    float Kp;         // proportional gain
-    float Ki;         // integral gain
-    float Kd;         // derivative gain
-    float setpoint;   // intensity setpoint
-    float integral;   // error acccumulator, sum of errors over time
-    float prev_error; // previous error, used for (d_error/dt)
-    float delta_t;    // change in time for derivative
-    float max_lim;    // value to set upper rail for output
-    float min_lim;    // value to set lower rail for output
+        float Kp;         // proportional gain
+        float Ki;         // integral gain
+        float Kd;         // derivative gain
+        float setpoint;   // intensity setpoint
+        float integral;   // error acccumulator, sum of errors over time
+        float prev_error; // previous error, used for (d_error/dt)
+        float delta_t;    // change in time for derivative
+        float max_lim;    // value to set upper rail for output
+        float min_lim;    // value to set lower rail for output
 } PID_t;
 
 // prototype for function that initializes PID structure

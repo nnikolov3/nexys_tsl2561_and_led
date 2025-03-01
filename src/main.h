@@ -43,21 +43,24 @@
 
 /* Peripheral definitions - Hardware-specific IDs and addresses */
 #define N4IO_DEVICE_ID \
-    XPAR_NEXYS4IO_0_DEVICE_ID // Device ID for Nexys4IO peripheral
+        XPAR_NEXYS4IO_0_DEVICE_ID // Device ID for Nexys4IO peripheral
 #define N4IO_BASEADDR \
-    XPAR_NEXYS4IO_0_S00_AXI_BASEADDR // Base address for Nexys4IO AXI interface
+        XPAR_NEXYS4IO_0_S00_AXI_BASEADDR // Base address for Nexys4IO AXI
+                                         // interface
 #define N4IO_HIGHADDR \
-    XPAR_NEXYS4IO_0_S00_AXI_HIGHADDR // High address for Nexys4IO AXI interface
+        XPAR_NEXYS4IO_0_S00_AXI_HIGHADDR // High address for Nexys4IO AXI
+                                         // interface
 #define INTC_DEVICE_ID \
-    XPAR_INTC_0_DEVICE_ID // Device ID for AXI interrupt controller
+        XPAR_INTC_0_DEVICE_ID // Device ID for AXI interrupt controller
 #define I2C_BASE_ADDR \
-    XPAR_AXI_IIC_0_BASEADDR // Base address for AXI IIC controller
+        XPAR_AXI_IIC_0_BASEADDR // Base address for AXI IIC controller
 #define I2C_DEV_ID_ADDR \
-    XPAR_AXI_IIC_0_DEVICE_ID // Device ID for AXI IIC controller
+        XPAR_AXI_IIC_0_DEVICE_ID // Device ID for AXI IIC controller
 #define GPIO_INTR_ID \
-    XPAR_MICROBLAZE_0_AXI_INTC_AXI_GPIO_1_IP2INTC_IRPT_INTR // Interrupt ID for
-                                                            // GPIO button
-                                                            // channel
+        XPAR_MICROBLAZE_0_AXI_INTC_AXI_GPIO_1_IP2INTC_IRPT_INTR // Interrupt ID
+                                                                // for GPIO
+                                                                // button
+                                                                // channel
 
 /* GPIO channels - Channel definitions for GPIO instance */
 #define BTN_CHANNEL       1 // GPIO channel 1 for button inputs
@@ -66,26 +69,26 @@
 /* RTOS definitions - Constants for FreeRTOS constructs */
 #define MAIN_QUEUE_LENGTH ( 1 ) // Length of the queues for task communication
 #define MAIN_DONT_BLOCK \
-    ( (TickType_t) 0 ) // Non-blocking operation for queue send/receive
+        ( (TickType_t) 0 ) // Non-blocking operation for queue send/receive
 
 /* Duty Cycle and Lux Related Constants */
 #define MAX_DUTY 255 // Max possible duty cycle for RGB1 Blue
 #define MIN_DUTY 0   // Min possible duty cycle for RGB1 Blue
 #define LUX_MASK \
-    0xFFFF // Mask for combining setpoint and lux values into one uint32_t
+        0xFFFF // Mask for combining setpoint and lux values into one uint32_t
 
 /* PID structure definition - Used for PID control in PID_Task */
 typedef struct
 {
-    float Kp;         // Proportional gain
-    float Ki;         // Integral gain
-    float Kd;         // Derivative gain
-    float setpoint;   // Desired lux value
-    float integral;   // Accumulated error
-    float prev_error; // Previous error for derivative term
-    float delta_t;    // Time between samples
-    float max_lim;    // Maximum output limit
-    float min_lim;    // Minimum output limit
+        float Kp;         // Proportional gain
+        float Ki;         // Integral gain
+        float Kd;         // Derivative gain
+        float setpoint;   // Desired lux value
+        float integral;   // Accumulated error
+        float prev_error; // Previous error for derivative term
+        float delta_t;    // Time between samples
+        float max_lim;    // Maximum output limit
+        float min_lim;    // Minimum output limit
 } PID_t;
 
 /* Global variables - Extern declarations for objects defined in main.c */
