@@ -13,12 +13,6 @@
 /* Include necessary headers */
 #include "main.h"
 
-/********** Duty Cycle Related Constants **********/
-#define max_duty 255 // max possible duty cycle for RGB1 Blue
-#define min_duty 0   // min possible duty cycle for RGB1 Blue
-
-#define lux_mask 0xFFFF // mask used for combining setpoint and lux values into one double
-
 int main ( void )
 {
     // Announcement
@@ -120,9 +114,14 @@ static void prvSetupHardware ( void )
 // Give a Semaphore
 static void gpio_intr ( void* pvUnused )
 {
-    xSemaphoreGiveFromISR ( binary_sem, NULL );
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    xSemaphoreGiveFromISR ( binary_sem, &xHigherPriorityTaskWoken );
 
     XGpio_InterruptClear ( &xInputGPIOInstance, XGPIO_IR_MASK );
+
+    /* Yield to higher-priority tasks if necessary */
+    portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
 
 // A task which takes the Interrupt Semaphore and sends the btn/sw states to PID Task
@@ -136,9 +135,9 @@ void Parse_Input_Task ( void* p )
     while ( 1 )
         if ( xSemaphoreTake ( binary_sem, 500 ) )
         {
-            btns = (NX4IO_getBtns() & 0x0C) >> 2; // get btnu/d and right justify
+            btns = (NX4IO_getBtns() & 0x0C); // get btnu/d and right justify
             sws = (uint8_t)(NX4IO_getSwitches() & 0x00FF); // get lower 8 switches
-            ValueToSend |= ((btns << 8) | (sws)); // move btnu to bit 9 and bntd to bit 8
+            ValueToSend |= ((btns << 6) | (sws)); // move btnu to bit 9 and bntd to bit 8
             //xil_printf ( "Queue Sent: %d\r\n", ValueToSend );
             xQueueSend ( toPID, &ValueToSend, mainDONT_BLOCK );
             ValueToSend &= 0x0000 ; // clear btn/sw values for next time
@@ -240,7 +239,7 @@ void PID_Task (void* p)
     // initialize the pid struct if it hasn't been
     if(!isInitialized)
     {
-        isInitialized = pid_init(&pid);
+        isInitialized = pid_init(pid);
     }
 
     // main task loop
@@ -331,6 +330,9 @@ void PID_Task (void* p)
     }
 
     // TODO: get(sample) TSL2561 reading
+    uint16_t ch0 = tsl2561_readChannel(&IicInstance, TSL2561_CHANNEL_0);
+    uint16_t ch1 = tsl2561_readChannel(&IicInstance, TSL2561_CHANNEL_1 );
+    tsl2561 = (float)ch0 - ((float)ch1 * 0.5); // basic lux approx.
 
     // this may need to be moved into the TSL2561 module to result in a more accurate reading
     // get tick when sample is collected and use to determin dt
@@ -342,7 +344,7 @@ void PID_Task (void* p)
 
     // running PID algorithm, uses float from TSL2561 driver
     // returns the percentage to increase/decrease the pwmLED by
-    pidOUT = pid_funct(&pid, tsl2561, sws);
+    pidOUT = pid_funct(pid, tsl2561, sws);
 
     /*PWM LED Write
     *   use the PID output to adjust the duty cycle and write it to the PWM LED

@@ -12,6 +12,9 @@
 #include "xil_printf.h"
 #include "xparameters.h"
 #include "xtmrctr.h"
+#include "xiic.h"     // Xilinx I2C driver API for AXI IIC controller
+//#include "xintc.h" // Xilinx interrupt controller API for interrupt management
+
 
 /* FreeRTOS kernel includes. */
 #include "FreeRTOS.h"
@@ -25,6 +28,7 @@
 #include "platform.h"
 #include "tsl2561.h"
 #include "pidtask.h"
+#include "i2c.h" // I2C driver interface for AXI IIC controller
 
 /*Definitions for NEXYS4IO Peripheral*/
 #define N4IO_DEVICE_ID XPAR_NEXYS4IO_0_DEVICE_ID
@@ -41,6 +45,12 @@
 /* A block time of 0 simply means, "don't block". */
 #define mainDONT_BLOCK (portTickType) 0
 
+/********** Duty Cycle Related Constants **********/
+#define max_duty 255 // max possible duty cycle for RGB1 Blue
+#define min_duty 0   // min possible duty cycle for RGB1 Blue
+
+#define lux_mask 0xFFFF // mask used for combining setpoint and lux values into one double
+
 // Create Instances
 static XGpio xInputGPIOInstance;
 
@@ -49,9 +59,7 @@ xSemaphoreHandle binary_sem;
 
 /* Interrupt-related globals (to be defined in tsl2561.c) */
 static XIic I2C_Instance; // I2C instance
-
-/* The queue used by the queue send and queue receive tasks. */
-//static xQueueHandle xQueue = NULL;
+//XIntc Intc; // Shared interrupt controller instance, defined in main.c
 
 /* The queue used to transfer buttons/switches from the input task to PID task. */
 static xQueueHandle toPID = NULL;

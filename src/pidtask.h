@@ -13,6 +13,7 @@
 #include "stdint.h"
 #include "stdio.h"
 
+/* PID structure definition */
 typedef struct {
     float Kp;           // proportional gain
     float Ki;           // integral gain
