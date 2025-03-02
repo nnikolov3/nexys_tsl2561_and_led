@@ -3,32 +3,24 @@
 BasedOnStyle: LLVM
 
 # Use 4 spaces for indentation, no tabs
-IndentWidth: 8
+IndentWidth: 4
 UseTab: Never
-TabWidth: 8
-BracedInitializerIndentWidth: 4
-ContinuationIndentWidth: 2
+TabWidth: 4
 
+# Align as much as possible
 AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
-AlignConsecutiveMacros: AcrossEmptyLinesAndComments
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
 AlignOperands: true
 AlignTrailingComments: true
-AlignArrayOfStructures: Right
-AlignEscapedNewlines: Left
-IncludeBlocks: Regroup
-IndentCaseBlocks: true
+
 # Space inside brackets for readability
-SpaceBeforeParens: false
+SpaceBeforeParens: Always
 SpaceInEmptyParentheses: true
 SpacesInParentheses: true
 SpacesInSquareBrackets: true
 SpacesInContainerLiterals: true
 SpaceAfterCStyleCast: true
-IndentCaseLabels: true
-MaxEmptyLinesToKeep: 1
-ReferenceAlignment: Right
-SeparateDefinitionBlocks: Always
 
 # Additional alignment and spacing tweaks
 ColumnLimit: 80
@@ -45,6 +37,4 @@ CommentPragmas: "^ IWYU pragma:"
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceAroundPointerQualifiers: After # int* not int *
-InsertNewlineAtEOF: True
-ReflowComments: true
 ---
