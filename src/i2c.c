@@ -12,7 +12,6 @@
  #include "i2c.h"
 
  /* Global variables */
- XIic IicInstance; // IIC driver instance for accessing the AXI IIC hardware
  XIic_Config* ConfigPtr; // Pointer to I2C configuration data
  extern XIntc Intc; // Shared interrupt controller instance (defined in main.c)
  

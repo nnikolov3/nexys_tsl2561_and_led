@@ -58,7 +58,7 @@ static XGpio xInputGPIOInstance;
 xSemaphoreHandle binary_sem;
 
 /* Interrupt-related globals (to be defined in tsl2561.c) */
-static XIic I2C_Instance; // I2C instance
+ XIic IicInstance; // I2C instance
 //XIntc Intc; // Shared interrupt controller instance, defined in main.c
 
 /* The queue used to transfer buttons/switches from the input task to PID task. */
