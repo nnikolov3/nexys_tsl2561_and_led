@@ -15,8 +15,15 @@
  * Authors: Nikolay Nikolov, Ashten Bontrager
  */
 
-/* Standard C library includes - General-purpose functions */
-#include <stdlib.h> // Standard library functions (e.g., configASSERT)
+/* Xilinx BSP and platform includes. */
+#include "sleep.h"
+#include "xgpio.h"
+#include "xil_printf.h"
+#include "xparameters.h"
+#include "xtmrctr.h"
+#include "xiic.h"     // Xilinx I2C driver API for AXI IIC controller
+//#include "xintc.h" // Xilinx interrupt controller API for interrupt management
+
 
 /* Xilinx BSP and platform includes - Hardware interaction */
 #include "platform.h" // Platform-specific configurations (e.g., Microblaze setup)
@@ -28,12 +35,12 @@
 #include "xparameters.h" // Hardware-specific parameters from the BSP (e.g., device IDs)
 #include "xtmrctr.h" // Xilinx timer driver API (used for FreeRTOS systick)
 
-/* FreeRTOS kernel includes - Real-time functionality */
-#include "FreeRTOS.h" // Main FreeRTOS kernel definitions and types (e.g., TickType_t)
-#include "queue.h" // Queue management APIs for inter-task communication
-#include "semphr.h" // Semaphore APIs for synchronization (e.g., binary semaphore)
-#include "task.h"   // Task management APIs (e.g., xTaskCreate, vTaskDelay)
-#include "timers.h" // Software timer APIs (included for completeness, unused here)
+/* Project-specific includes. */
+#include "nexys4IO.h"
+#include "platform.h"
+#include "tsl2561.h"
+#include "pidtask.h"
+#include "i2c.h" // I2C driver interface for AXI IIC controller
 
 /* Project-specific includes - Custom headers for peripheral and sensor drivers
  */
@@ -71,11 +78,34 @@
 #define MAIN_DONT_BLOCK                                                        \
     ( (TickType_t) 0 ) // Non-blocking operation for queue send/receive
 
-/* Duty Cycle and Lux Related Constants */
-#define MAX_DUTY 255 // Max possible duty cycle for RGB1 Blue
-#define MIN_DUTY 0   // Min possible duty cycle for RGB1 Blue
-#define LUX_MASK                                                               \
-    0xFFFF // Mask for combining setpoint and lux values into one uint32_t
+/********** Duty Cycle Related Constants **********/
+#define max_duty 255 // max possible duty cycle for RGB1 Blue
+#define min_duty 0   // min possible duty cycle for RGB1 Blue
+
+#define lux_mask 0xFFFF // mask used for combining setpoint and lux values into one double
+
+// macro for repeating code that checks for upper/lower saturation of setpoint and gains
+#define UPDATE_SATURATING(val, inc, min_val, max_val, increase)	\
+    do {														\
+        if (increase)											\
+		{                                        				\
+            if ((val + inc) < max_val)                     		\
+                val += inc;                                		\
+            else                                               	\
+                val = max_val;                             		\
+        }														\
+		else													\
+		{		                                              	\
+			if (val > inc)   									\
+                val -= inc;                                		\
+            else                                               	\
+                val = min_val;                             		\
+        }                                                      	\
+    } while (0)
+
+
+// Create Instances
+static XGpio xInputGPIOInstance;
 
 /* PID structure definition - Used for PID control in PID_Task */
 typedef struct
@@ -91,20 +121,9 @@ typedef struct
     float min_lim;    // Minimum output limit
 } PID_t;
 
-/* Global variables - Extern declarations for objects defined in main.c */
-extern XGpio xInputGPIOInstance;     // GPIO instance for buttons and switches,
-                                     // defined in main.c
-extern SemaphoreHandle_t binary_sem; // Binary semaphore for signaling button
-                                     // interrupts, defined in main.c
-extern QueueHandle_t toPID;   // Queue for sending button/switch states to PID
-                              // task, defined in main.c
-extern QueueHandle_t fromPID; // Queue for sending setpoint/lux to display task,
-                              // defined in main.c
-extern XIntc Intc; // Shared interrupt controller instance, defined in main.c
-extern XIic
-    IicInstance; // I2C instance for TSL2561 communication, defined in i2c.c
-
-/* Function declarations - Prototypes for functions implemented in main.c */
+/* Interrupt-related globals (to be defined in tsl2561.c) */
+ XIic IicInstance; // I2C instance
+//XIntc Intc; // Shared interrupt controller instance, defined in main.c
 
 /**
  * Sets up GPIO hardware for button interrupts.
@@ -139,57 +158,5 @@ void Parse_Input_Task ( void* p );
  * @param p Pointer to PID_t structure
  */
 void PID_Task ( void* p );
-
-/**
- * Task to update 7-segment display with setpoint and lux values.
- *
- * @param p Unused parameter
- */
-void Display_Task ( void* p );
-
-/**
- * Task to read TSL2561 sensor data.
- * Periodically reads CH0 and CH1 values and prints them.
- *
- * @param p Unused parameter
- */
-void sensor_task ( void* p );
-
-/**
- * Initializes the system: GPIO, I2C, TSL2561, and Nexys peripherals.
- * Sets up hardware components without configuring interrupts (done separately
- * in main).
- *
- * @return XST_SUCCESS on success, XST_FAILURE on failure
- */
-static int do_init ( void );
-
-/**
- * Initializes Nexys A7 peripherals (e.g., LEDs, 7-segment display).
- * Configures the Nexys4IO driver for peripheral control.
- *
- * @return XST_SUCCESS on success, XST_FAILURE on failure
- */
-static int nexys_init ( void );
-
-/**
- * Initializes PID structure for use in the PID task.
- * Sets initial values for PID parameters.
- *
- * @param pid Pointer to PID_t structure
- * @return 1 on success (for consistency with XST_SUCCESS-like behavior)
- */
-int pid_init ( PID_t* pid );
-
-/**
- * PID algorithm implementation.
- * Calculates PID output based on lux value and switch settings.
- *
- * @param pid Pointer to PID_t structure
- * @param lux_value Current lux reading from TSL2561
- * @param switches Current switch states
- * @return Float percentage value for PWM adjustment
- */
-float pid_funct ( PID_t* pid, float lux_value, uint8_t switches );
 
 #endif /* MAIN_H */
