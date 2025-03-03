@@ -33,7 +33,7 @@ bool pid_init (PID_t* pid);
 // prototype of pid function that returns the controlled signal as a float
 // takes lux_value, returned from TSL2561 sensor returns float vlaue 
 // is used to determine what value to write for LED PWM 
-float pid_funct (PID_t* pid, float lux_value, uint8_t switches);
+float pid_funct (PID_t* pid, uint16_t lux_value, uint8_t switches);
 
 /*********************PID Task Prototype*************************************
 *   Task Handles the Following:

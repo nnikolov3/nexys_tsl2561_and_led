@@ -63,7 +63,7 @@
         }														\
 		else													\
 		{		                                              	\
-			if ((val - inc) > min_val)   						\
+			if (val > inc)   									\
                 val -= inc;                                		\
             else                                               	\
                 val = min_val;                             		\

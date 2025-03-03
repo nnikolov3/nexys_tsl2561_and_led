@@ -231,7 +231,7 @@ void PID_Task (void* p)
     	    {
     	    	btns = 0x00;
     	    	sws = sws;
-    	    	vTaskDelay(1);
+    	    	vTaskDelay(2);
     	    }
 
 
@@ -359,35 +359,21 @@ void PID_Task (void* p)
     	    *   End by writing duty cycle to RGB1 blue, drives pwmLED
     	    *   using NX4IO_RGBLED_setDutyCycle command
     	    */
-    	    if (pidOUT > 0)
+
+    	    // clamp the output to the max value if pidOUT >= 1
+    	    // clamp the output to the min value if the correction pulls output <= min value
+    	    // otherwise adjusts pwmLED by the required percentage
+    	    if ((pwmLED + (pidOUT * max_duty)) >= max_duty)
     	    {
-    	        // clamp the output to the max value if pidOUT >= 1
-    	        // prevent over driving LED or wrap around
-    	        if ((pwmLED + (uint8_t)(pidOUT * max_duty)) >= max_duty)
-    	        {
-    	            pwmLED = max_duty;
-    	        }
-    	        else
-    	        {
-    	            pwmLED += (uint8_t)((pidOUT) * max_duty);
-    	        }
+    	    	pwmLED = max_duty;
     	    }
-    	    else if (pidOUT < 0)
+    	    else if ((pwmLED + (pidOUT * max_duty)) <= min_duty)
     	    {
-    	        // clamp the output to the min value if pidOUT <= 0
-    	        // prevent over driving LED or wrap around
-    	        if ((pwmLED - (uint8_t)(pidOUT * max_duty)) <= min_duty)
-    	        {
-    	            pwmLED = min_duty;
-    	        }
-    	        else
-    	        {
-    	            pwmLED -= (uint8_t)((pidOUT) * max_duty);
-    	        }
+    	    	pwmLED = min_duty;
     	    }
     	    else
     	    {
-    	    	pwmLED = pwmLED;
+    	    	pwmLED = (uint8_t)(pwmLED + (pidOUT * max_duty));
     	    }
     	    // send PWM value to LED
     	    NX4IO_RGBLED_setDutyCycle(RGB1, 0, 0, pwmLED);
@@ -475,7 +461,7 @@ bool pid_init (PID_t *pid)
 *   the derivative can be though of as the (delta e(t))/(delta_t)
 *   delta_t is the time between samples
 *****************************************************************************/
-float pid_funct (PID_t* pid, float lux_value, uint8_t switches)
+float pid_funct (PID_t* pid, uint16_t lux_value, uint8_t switches)
 {
     // e(t), error at time of sample
     float error = pid->setpoint - lux_value;
