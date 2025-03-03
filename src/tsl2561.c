@@ -118,9 +118,5 @@
 
      /* Combine high and low bytes into a 16-bit value */
      uint16_t value = ( buf[ 1 ] << 8 ) | buf[ 0 ];
-     xil_printf( "       [DEBUG] Channel %d read: %5u (Raw: 0x%04X)\r\n",
-                 channel,
-                 value,
-                 value );
      return value;
  }

@@ -51,6 +51,26 @@
 
 #define lux_mask 0xFFFF // mask used for combining setpoint and lux values into one double
 
+// macro for repeating code that checks for upper/lower saturation of setpoint and gains
+#define UPDATE_SATURATING(val, inc, min_val, max_val, increase)	\
+    do {														\
+        if (increase)											\
+		{                                        				\
+            if ((val + inc) < max_val)                     		\
+                val += inc;                                		\
+            else                                               	\
+                val = max_val;                             		\
+        }														\
+		else													\
+		{		                                              	\
+			if ((val - inc) > min_val)   						\
+                val -= inc;                                		\
+            else                                               	\
+                val = min_val;                             		\
+        }                                                      	\
+    } while (0)
+
+
 // Create Instances
 static XGpio xInputGPIOInstance;
 
@@ -75,7 +95,5 @@ static void gpio_intr ( void* pvUnused );
 void Parse_Input_Task ( void* p );
 
 int do_init ( void );
-
-void nexys4io_selfTest ( void );
 
 #endif /* MAIN_H */

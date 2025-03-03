@@ -15,7 +15,7 @@
 
 /* PID structure definition */
 typedef struct {
-    float Kp;           // proportional gain
+    uint32_t Kp;           // proportional gain
     float Ki;           // integral gain
     float Kd;           // derivative gain
     uint16_t setpoint;  // intensity setpoint
@@ -53,3 +53,5 @@ void PID_Task (void* p);
 *   Gets lux and setpoint values from Q and updates 7-seg display
 *****************************************************************************/
 void Display_Task (void* p);
+
+void print_pid(PID_t *pid);

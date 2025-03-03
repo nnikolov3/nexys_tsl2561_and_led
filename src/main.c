@@ -16,12 +16,11 @@
 int main ( void )
 {
     // Announcement
-    xil_printf ( "Hello from FreeRTOS Example\r\n" );
+    xil_printf ( "Hello from FreeRTOS LUX PID Controller\r\n" );
 
     // Initialize the HW
     prvSetupHardware ( );
     do_init ( );
-    nexys4io_selfTest ( );
     tsl2561_init ( &IicInstance );
 
     // Create Semaphore
@@ -36,7 +35,7 @@ int main ( void )
     configASSERT (fromPID);
 
     /*Creat pid structure for keeping track of PID elements*/
-    PID_t ledPID;
+    static PID_t ledPID;
 
     // Create Task1
     xTaskCreate ( Parse_Input_Task,
@@ -135,15 +134,14 @@ void Parse_Input_Task ( void* p )
     while ( 1 )
         if ( xSemaphoreTake ( binary_sem, 500 ) )
         {
-            btns = (NX4IO_getBtns() & 0x0C); // get btnu/d and right justify
+            btns = (NX4IO_getBtns() & 0x1C); // get btns and mask for u/d/c
             sws = (uint8_t)(NX4IO_getSwitches() & 0x00FF); // get lower 8 switches
-            ValueToSend |= ((btns << 6) | (sws)); // move btnu to bit 9 and bntd to bit 8
+            ValueToSend |= ((btns << 8) | (sws)); // move btnc to bit 10, btnu to bit 9, and bntd to bit 8
             NX4IO_setLEDs(sws);
             xQueueSend ( toPID, &ValueToSend, mainDONT_BLOCK );
             ValueToSend &= 0x0000 ; // clear btn/sw values for next time
         }
-        else
-            xil_printf ( "Semaphore time out\r\n" );
+        else; // do nothing if semaphore isn't given
 }
 
 /****************************************************************************
@@ -185,30 +183,6 @@ int do_init ( void )
     return XST_SUCCESS;
 }
 
-/****************************************************************************
- * nexys4io_selfTest() - performs a self test on the NexysA7 peripheral
- *
- * @brief This is mostly a visual test to confirm that the 7-segment display and
- * RGB LEDs hardware and drivers are operating correctly.  The test does the
- *following: o sends pattern(s) to the LEDs on the board o Writes a message on
- *the 7-segment display o individually lights the RGB LEDs o sets the RGB2 LED
- *to several values that can be observed o Turns off the LEDs and blanks the
- *7-segment digits and decimal points
- *****************************************************************************/
-void nexys4io_selfTest ( void )
-{
-    xil_printf ( "Starting Nexys4IO self test...\r\n" );
-
-    xil_printf ( "\tcheck functionality of 7-segment display\r\n" );
-    // set the display digits to -ECE544- and turn off
-    // the decimal points using the "raw" set functions.
-    NX4IO_SSEG_setSSEG_DATA ( SSEGHI, 0x0058E30E );
-    NX4IO_SSEG_setSSEG_DATA ( SSEGLO, 0x00144116 );
-
-    xil_printf ( "...Nexys4IO self test complete\r\n" );
-    return;
-}
-
 /**************************PID Task******************************************
 *   Task Handles the Following:
 *   Reads perameter message from MsgQ
@@ -247,11 +221,20 @@ void PID_Task (void* p)
     while(1)
     {
     	// recieve message from input task, 16-bit uint that contains switch and button values
-    	    xQueueReceive (toPID, &btnSws, portMAX_DELAY);
+    	    if (xQueueReceive (toPID, &btnSws, 0) == pdPASS)
+    	    {
+    	    	// parse values recieved from input task
+    	    	btns = (btnSws & 0x1C00) >> 10;
+    	    	sws = (btnSws & 0x0FF);
+    	    }
+    	    else
+    	    {
+    	    	btns = 0x00;
+    	    	sws = sws;
+    	    	vTaskDelay(1);
+    	    }
 
-    	    // parse values recieved from input task
-    	    btns = (btnSws & 0x0300) >> 8;
-    	    sws = (btnSws & 0x0FF);
+
 
     	    // scale base increments based on values of switches[5:4]
     	    if (!(sws & 0x30))  //switches [5:4] = [0:0]
@@ -276,52 +259,72 @@ void PID_Task (void* p)
     	    *   for buttons, a value of 1 means up button was pressed
     	    *   a value of 2 means down button was pressed
     	    *   After parsing, updates the PID struct with the setpoint or PID gain values
+    	    *   has controls to prevent setpoint from being set higher or lower than the upper and lower limits
+    	    *   Also prevents Kp, Ki, and Kd gains from going negative when decrementing
+    	    *   uses macro(UPDATE_SATURATING) for saturation checks, help with readability and code redundancy
     	    */
     	    if((sws & 0x08))
     	    {
-    	        if ((btns & 0x03) == 1)
+    	        if (btns & 0x02)
     	        {
-    	            pid->setpoint += (incScaling * baseSP);
+    	        	UPDATE_SATURATING(pid->setpoint, (incScaling * baseSP), pid->min_lim, pid->max_lim, true);
     	        }
-    	        if ((btns & 0x03) == 2)
+    	        else if (btns & 0x01)
     	        {
-    	            pid->setpoint -= (incScaling * baseSP);
+    	        	UPDATE_SATURATING(pid->setpoint, (incScaling * baseSP), pid->min_lim, pid->max_lim, false);
     	        }
+    	        else
+    	        {
+    	        	pid->setpoint = pid->setpoint;
+    	        }
+
     	    }
     	    else
     	    {
     	        switch (sws & 0xC0)
     	        {
     	        case 0x40:
-    	            if ((btns & 0x03) == 2)
+    	            if ((btns & 0x02))
     	            {
-    	                pid->Kp += (incScaling * baseSP);
+    	            	UPDATE_SATURATING(pid->Kp, (incScaling * baseSP), 0, pid->max_lim, true);
     	            }
-    	            if ((btns & 0x03) == 1)
+    	            else if ((btns & 0x01))
     	            {
-    	                pid->Kp -= (incScaling * baseSP);
+    	            	UPDATE_SATURATING(pid->Kp, (incScaling * baseSP), 0, pid->max_lim, false);
+    	            }
+    	            else
+    	            {
+    	            	pid->Kp = pid->Kp;
     	            }
     	            break;
 
     	        case 0x80:
-    	            if ((btns & 0x03) == 2)
+    	            if ((btns & 0x02))
     	            {
-    	                pid->Ki += (incScaling * baseID);
+    	            	UPDATE_SATURATING(pid->Ki, (incScaling * baseID), 0, pid->max_lim, true);
     	            }
-    	            if ((btns & 0x03) == 1)
+    	            else if ((btns & 0x01))
     	            {
-    	                pid->Ki -= (incScaling * baseID);
+    	            	UPDATE_SATURATING(pid->Ki, (incScaling * baseID), 0, pid->max_lim, false);
+    	            }
+    	            else
+    	            {
+    	            	pid->Ki = pid->Ki;
     	            }
     	            break;
 
     	        case 0xC0:
-    	            if ((btns & 0x03) == 2)
+    	            if ((btns & 0x02))
     	            {
-    	                pid->Kd += (incScaling * baseID);
+    	            	UPDATE_SATURATING(pid->Kd, (incScaling * baseID), 0, pid->max_lim, true);
     	            }
-    	            if ((btns & 0x03) == 1)
+    	            else if ((btns & 0x01))
     	            {
-    	                pid->Kd -= (incScaling * baseID);
+    	            	UPDATE_SATURATING(pid->Kd, (incScaling * baseID), 0, pid->max_lim, false);
+    	            }
+    	            else
+    	            {
+    	            	pid->Kd = pid->Kd;
     	            }
     	            break;
 
@@ -330,9 +333,9 @@ void PID_Task (void* p)
     	        }
     	    }
 
-    	    // TODO: get(sample) TSL2561 reading
-    	    float ch0 = tsl2561_readChannel(&IicInstance, TSL2561_CHANNEL_0);
-    	    float ch1 = tsl2561_readChannel(&IicInstance, TSL2561_CHANNEL_1 );
+    	    // Get TSL2561 reading
+    	    float ch0 = tsl2561_readChannel(&IicInstance, TSL2561_CHANNEL_0); // visible and infrared
+    	    float ch1 = tsl2561_readChannel(&IicInstance, TSL2561_CHANNEL_1 ); // just infrared
     	    tsl2561 = (uint16_t)ch0 - ((uint16_t)ch1 * 0.5); // basic lux approx.
 
     	    // this may need to be moved into the TSL2561 module to result in a more accurate reading
@@ -356,11 +359,11 @@ void PID_Task (void* p)
     	    *   End by writing duty cycle to RGB1 blue, drives pwmLED
     	    *   using NX4IO_RGBLED_setDutyCycle command
     	    */
-    	    if (pidOUT >= 0)
+    	    if (pidOUT > 0)
     	    {
     	        // clamp the output to the max value if pidOUT >= 1
     	        // prevent over driving LED or wrap around
-    	        if ((pwmLED += (uint8_t)((pidOUT) * max_duty)) >= max_duty)
+    	        if ((pwmLED + (uint8_t)(pidOUT * max_duty)) >= max_duty)
     	        {
     	            pwmLED = max_duty;
     	        }
@@ -369,11 +372,11 @@ void PID_Task (void* p)
     	            pwmLED += (uint8_t)((pidOUT) * max_duty);
     	        }
     	    }
-    	    else
+    	    else if (pidOUT < 0)
     	    {
     	        // clamp the output to the min value if pidOUT <= 0
     	        // prevent over driving LED or wrap around
-    	        if ((pwmLED -= (uint8_t)((pidOUT) * max_duty)) <= min_duty)
+    	        if ((pwmLED - (uint8_t)(pidOUT * max_duty)) <= min_duty)
     	        {
     	            pwmLED = min_duty;
     	        }
@@ -382,9 +385,17 @@ void PID_Task (void* p)
     	            pwmLED -= (uint8_t)((pidOUT) * max_duty);
     	        }
     	    }
+    	    else
+    	    {
+    	    	pwmLED = pwmLED;
+    	    }
+    	    // send PWM value to LED
     	    NX4IO_RGBLED_setDutyCycle(RGB1, 0, 0, pwmLED);
+
+    	    // Print setpoint, lux value, and duty cycle over serial port. Used for plotting
     	    xil_printf ( "Setpoint Value: %d\r\n", pid->setpoint );
     	    xil_printf ( "Lux Value: %d\r\n", tsl2561 );
+    	    xil_printf ( "PWM LED Duty Cycle: %d\r\n", pwmLED );
 
     	    // update setpntLux with value to be displayed by display task
     	    setpntLux = 0x00000000; // make sure old data is cleared
@@ -393,6 +404,12 @@ void PID_Task (void* p)
 
     	    //send message to display thread MsgQ to update setpoint and current lux
     	    xQueueSend (fromPID, &setpntLux ,mainDONT_BLOCK);
+
+    	    // if center button is pressed print out the current PID configuration
+    	    if ((btns & 0x04))
+    	    {
+    	    	print_pid(pid);
+    	    }
     }
 }
 
@@ -505,4 +522,13 @@ float pid_funct (PID_t* pid, float lux_value, uint8_t switches)
 
     // return a percentage value to be used for setting the intensity of PWM LED
     return (Pterm + Iterm + Dterm) / pid->setpoint;
+}
+
+// Prints out the PID gains when the center is pressed
+void print_pid(PID_t *pid)
+{
+    xil_printf("PID gains:\r\n");
+    xil_printf("Kp       = %u\r\n", pid->Kp);				// uint32_t
+    xil_printf("Ki       = %u.%02u\r\n", (uint16_t)pid->Ki, (uint16_t)((pid->Ki - (uint16_t)pid->Ki) * 100));			// float, manipulated because xil_printf doesn't handle floating point
+    xil_printf("Kd       = %u.%02u\r\n", (uint16_t)pid->Kd, (uint16_t)((pid->Kd - (uint16_t)pid->Kd) * 100));        	// float, manipulated because xil_printf doesn't handle floating point
 }
