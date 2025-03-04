@@ -46,10 +46,10 @@ int main ( void )
                   NULL );
 
     // Create Task2
-    xTaskCreate ( PID_Task, "PID", configMINIMAL_STACK_SIZE, &ledPID, 2, NULL );
+    xTaskCreate ( PID_Task, "PID", configMINIMAL_STACK_SIZE, &ledPID, 1, NULL );
 
     // Create Task3
-    xTaskCreate ( Display_Task, "Disp", configMINIMAL_STACK_SIZE, NULL, 3, NULL );
+    xTaskCreate ( Display_Task, "Disp", configMINIMAL_STACK_SIZE, NULL, 1, NULL );
 
     // Start the Scheduler
     xil_printf ( "Starting the scheduler\r\n" );
@@ -134,7 +134,7 @@ void Parse_Input_Task ( void* p )
     while ( 1 )
         if ( xSemaphoreTake ( binary_sem, 500 ) )
         {
-            btns = (NX4IO_getBtns() & 0x1C); // get btns and mask for u/d/c
+            btns = (NX4IO_getBtns() & 0x1E); // get btns and mask for u/d/c/l
             sws = (uint8_t)(NX4IO_getSwitches() & 0x00FF); // get lower 8 switches
             ValueToSend |= ((btns << 8) | (sws)); // move btnc to bit 10, btnu to bit 9, and bntd to bit 8
             NX4IO_setLEDs(sws);
@@ -205,10 +205,12 @@ void PID_Task (void* p)
     uint32_t setpntLux;     // value to send to the display Task Q
     uint8_t btns;           // btn values parsed from btnSws
     uint8_t sws;            // switch values parsed from btnSws
-    float baseID = 0.1;     // base increment for ID tuning set to 0.1
-    uint8_t baseSP = 1;     // base increment for setpoint and Kp to 1
+    float baseID = 0.01;    // base increment for ID tuning set to 0.01
+    float baseP = 0.1;		// base increment for Kp to 0.1
+    uint8_t baseSP = 1;     // base increment for setpoint 1
     uint8_t incScaling;     // scaling factor based on switch values
-    TickType_t lastTick = 0; // used for more accurate delat t values
+    uint8_t btnPrint = 0x00;// control for toggeling value prints
+    TickType_t lastTick = xTaskGetTickCount();// used for more accurate delta t values
 
     static bool isInitialized = false;	// true if the init function has run at least once
     // initialize the pid struct if it hasn't been
@@ -221,17 +223,22 @@ void PID_Task (void* p)
     while(1)
     {
     	// recieve message from input task, 16-bit uint that contains switch and button values
-    	    if (xQueueReceive (toPID, &btnSws, 0) == pdPASS)
+    	    if (xQueueReceive (toPID, &btnSws, 42) == pdPASS)
     	    {
     	    	// parse values recieved from input task
-    	    	btns = (btnSws & 0x1C00) >> 10;
+    	    	btns = (btnSws & 0x1E00) >> 8;
     	    	sws = (btnSws & 0x0FF);
     	    }
     	    else
     	    {
     	    	btns = 0x00;
     	    	sws = sws;
-    	    	vTaskDelay(2);
+    	    }
+
+    	    // check left button and toggle print if pressed
+    	    if (btns & 0x02)
+    	    {
+    	    	btnPrint = !btnPrint;
     	    }
 
 
@@ -265,11 +272,11 @@ void PID_Task (void* p)
     	    */
     	    if((sws & 0x08))
     	    {
-    	        if (btns & 0x02)
+    	        if (btns & 0x08)
     	        {
     	        	UPDATE_SATURATING(pid->setpoint, (incScaling * baseSP), pid->min_lim, pid->max_lim, true);
     	        }
-    	        else if (btns & 0x01)
+    	        else if (btns & 0x04)
     	        {
     	        	UPDATE_SATURATING(pid->setpoint, (incScaling * baseSP), pid->min_lim, pid->max_lim, false);
     	        }
@@ -284,13 +291,13 @@ void PID_Task (void* p)
     	        switch (sws & 0xC0)
     	        {
     	        case 0x40:
-    	            if ((btns & 0x02))
+    	            if ((btns & 0x08))
     	            {
-    	            	UPDATE_SATURATING(pid->Kp, (incScaling * baseSP), 0, pid->max_lim, true);
+    	            	UPDATE_SATURATING(pid->Kp, (incScaling * baseP), 0, pid->max_lim, true);
     	            }
-    	            else if ((btns & 0x01))
+    	            else if ((btns & 0x04))
     	            {
-    	            	UPDATE_SATURATING(pid->Kp, (incScaling * baseSP), 0, pid->max_lim, false);
+    	            	UPDATE_SATURATING(pid->Kp, (incScaling * baseP), 0, pid->max_lim, false);
     	            }
     	            else
     	            {
@@ -299,11 +306,11 @@ void PID_Task (void* p)
     	            break;
 
     	        case 0x80:
-    	            if ((btns & 0x02))
+    	            if ((btns & 0x08))
     	            {
     	            	UPDATE_SATURATING(pid->Ki, (incScaling * baseID), 0, pid->max_lim, true);
     	            }
-    	            else if ((btns & 0x01))
+    	            else if ((btns & 0x04))
     	            {
     	            	UPDATE_SATURATING(pid->Ki, (incScaling * baseID), 0, pid->max_lim, false);
     	            }
@@ -314,11 +321,11 @@ void PID_Task (void* p)
     	            break;
 
     	        case 0xC0:
-    	            if ((btns & 0x02))
+    	            if ((btns & 0x08))
     	            {
     	            	UPDATE_SATURATING(pid->Kd, (incScaling * baseID), 0, pid->max_lim, true);
     	            }
-    	            else if ((btns & 0x01))
+    	            else if ((btns & 0x04))
     	            {
     	            	UPDATE_SATURATING(pid->Kd, (incScaling * baseID), 0, pid->max_lim, false);
     	            }
@@ -341,7 +348,7 @@ void PID_Task (void* p)
     	    // this may need to be moved into the TSL2561 module to result in a more accurate reading
     	    // get tick when sample is collected and use to determin dt
     	    TickType_t currentTick = xTaskGetTickCount();
-    	    pid->delta_t = ((currentTick - lastTick) * portTICK_PERIOD_MS) / 1000.0f;
+    	    pid->delta_t = ((currentTick - lastTick) * (1/100.0f));
     	    // update last tick time for use in next dt calculation
     	    lastTick = currentTick;
 
@@ -379,9 +386,13 @@ void PID_Task (void* p)
     	    NX4IO_RGBLED_setDutyCycle(RGB1, 0, 0, pwmLED);
 
     	    // Print setpoint, lux value, and duty cycle over serial port. Used for plotting
-    	    xil_printf ( "Setpoint Value: %d\r\n", pid->setpoint );
-    	    xil_printf ( "Lux Value: %d\r\n", tsl2561 );
-    	    xil_printf ( "PWM LED Duty Cycle: %d\r\n", pwmLED );
+    	    if (btnPrint)
+    	    {
+    	    	xil_printf ( "Setpoint Value: %d\r\n", pid->setpoint );
+    	    	xil_printf ( "Lux Value: %d\r\n", tsl2561 );
+    	    	xil_printf ( "PWM LED Duty Cycle: %d\r\n", pwmLED );
+    	    }
+
 
     	    // update setpntLux with value to be displayed by display task
     	    setpntLux = 0x00000000; // make sure old data is cleared
@@ -392,10 +403,12 @@ void PID_Task (void* p)
     	    xQueueSend (fromPID, &setpntLux ,mainDONT_BLOCK);
 
     	    // if center button is pressed print out the current PID configuration
-    	    if ((btns & 0x04))
+    	    if ((btns & 0x10))
     	    {
     	    	print_pid(pid);
     	    }
+
+    	    //vTaskDelay(42);
     }
 }
 
@@ -434,10 +447,10 @@ void Display_Task (void* p)
 *****************************************************************************/
 bool pid_init (PID_t *pid)
 {
-    pid -> Kp = 0;
-    pid -> Ki = 0;
+    pid -> Kp = 0.7;
+    pid -> Ki = 0.2;
     pid -> Kd = 0;
-    pid -> setpoint = 250;
+    pid -> setpoint = 100;
     pid -> integral = 0;
     pid -> prev_error = 0;
     pid -> delta_t = 0.437; // set to the worst case sampling time but will dynamically update in use
@@ -463,6 +476,10 @@ bool pid_init (PID_t *pid)
 *****************************************************************************/
 float pid_funct (PID_t* pid, uint16_t lux_value, uint8_t switches)
 {
+	// limits for integral range
+	uint16_t max_int =  2048;
+	float min_int = -2048;
+
     // e(t), error at time of sample
     float error = pid->setpoint - lux_value;
 
@@ -479,7 +496,17 @@ float pid_funct (PID_t* pid, uint16_t lux_value, uint8_t switches)
     } 
     
     // update integral, and get integral term
+    // clamps to prevent Iterm from generating a value that would exceed 50% pwm range
     pid -> integral += (error * pid->delta_t);
+    if(pid->integral >= max_int)
+    {
+    	pid->integral = max_int;
+    }
+    else if (pid->integral <= min_int)
+    {
+    	pid->integral = min_int;
+    }
+
     float Iterm;
     // set to zero if switch[1] is 0
     if (switches & 0x02)
@@ -507,14 +534,14 @@ float pid_funct (PID_t* pid, uint16_t lux_value, uint8_t switches)
     pid->prev_error = error;
 
     // return a percentage value to be used for setting the intensity of PWM LED
-    return (Pterm + Iterm + Dterm) / pid->setpoint;
+    return (Pterm + Iterm + Dterm) / (float)pid->setpoint;
 }
 
 // Prints out the PID gains when the center is pressed
 void print_pid(PID_t *pid)
 {
     xil_printf("PID gains:\r\n");
-    xil_printf("Kp       = %u\r\n", pid->Kp);				// uint32_t
+    xil_printf("Kp       = %u.%02u\r\n", (uint16_t)pid->Kp, (uint16_t)((pid->Kp - (uint16_t)pid->Kp) * 100));
     xil_printf("Ki       = %u.%02u\r\n", (uint16_t)pid->Ki, (uint16_t)((pid->Ki - (uint16_t)pid->Ki) * 100));			// float, manipulated because xil_printf doesn't handle floating point
     xil_printf("Kd       = %u.%02u\r\n", (uint16_t)pid->Kd, (uint16_t)((pid->Kd - (uint16_t)pid->Kd) * 100));        	// float, manipulated because xil_printf doesn't handle floating point
 }
